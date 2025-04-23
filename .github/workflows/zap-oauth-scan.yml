@@ -34,7 +34,9 @@ jobs:
         target: 'http://localhost:8000'
         token: ${{ secrets.GITHUB_TOKEN }}
         fail_action: false
-        cmd_options: '-config scanner.attackOnStart=true -config scanner.maxRuleDurationInMins=2'
+        cmd_options: >
+          -config scanner.attackOnStart=true
+          -config scanner.maxRuleDurationInMins=2
 
     - name: Summarize ZAP Alerts in CI logs
       run: |
