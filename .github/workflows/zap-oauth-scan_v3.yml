@@ -1,0 +1,59 @@
+name: ZAP OAuth2 Authenticated Scan
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  zap_oauth_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install fastapi uvicorn "python-jose[cryptography]" pydantic
+        sudo apt-get install -y jq
+
+    - name: Start FastAPI app
+      run: |
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 5
+
+    - name: Get Bearer Token
+      run: bash get-token.sh
+
+    - name: Run ZAP Full Scan with Auth Header
+      run: |
+        TOKEN=$(cat token.txt)
+        docker run \
+          -v ${{ github.workspace }}:/zap/wrk/:rw \
+          --network=host \
+          ghcr.io/zaproxy/zaproxy:stable \
+          zap-full-scan.py \
+          -t http://localhost:8000/protected \
+          -J report_json.json \
+          -w report_md.md \
+          -r report_html.html \
+          -config replacer.full_list(0).enabled=true \
+          -config replacer.full_list(0).matchtype=REQ_HEADER \
+          -config replacer.full_list(0).matchregex=false \
+          -config replacer.full_list(0).matchstring=Authorization \
+          -config replacer.full_list(0).replacement="Bearer $TOKEN"
+
+    - name: Upload ZAP report
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-auth-report
+        path: |
+          *.html
+          *.json
+        if-no-files-found: warn
